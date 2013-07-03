@@ -1,0 +1,65 @@
+Dodai L2E Plugin
+
+* About
+This Quantum plugin manages VNC with VLANs.
+VNC is a kind of Open Flow Controller supporting L2 networks with VLANs.
+And this plugin supports the followings:
+- The OFC driver for L2E-VNC 2.0 (Note: the driver is selectable)
+- The extension API of Dodai outer port
+
+* Module Structure
+quantum/plugins/dodai/
+- config.py - The configuration file
+- dodai_plugin.py - The core module of Dodai L2E Plugin
+- exception.py - Includes the definitions of exceptions
+- ofc_manager.py - Represents the operation of OFC using a driver
+- /db - The persistence framework and model classes of networks with VLANs and Dodai outer port
+- /drivers - The OFC drivers
+- /extensions - The extension API modules for Dodai outer port
+
+* The extension API of Dodai outer port
+This plugin supports the following API:
+- GET /dodai-outer-ports - Fetches a list of all Dodai outer ports
+- POST /dodai-outer-ports - Creates a new Dodai outer port
+- GET /dodai-outer-ports/{id} - Fetches information of a certain Dodai outer port
+- DELETE /dodai-outer-ports/{id} - Deletes the specified Dodai outer port
+
+* Requisites
+The following are necessary by default.
+- L2E-VNC 2.0
+
+* Configurations
+This plugin requires the following configurations in dodai.ini.
+The dodai.ini file is normally located in the /etc/quantum/plugins/dodai/ directory.
+
+Here is a sample of dodai.ini.
+========================================
+[DATABASE]
+sql_connection=mysql://<database-user>:<database-pass>@<database-host>/<database-name>?charset=utf8
+
+
+[OFC]
+# The driver used to manage the OpenFlow Controller.
+#ofc_driver=quantum.plugins.dodai.drivers.l2e_vnc.VNCDummyDriver
+ofc_driver=quantum.plugins.dodai.drivers.l2e_vnc.DodaiL2EVNCV2Driver
+
+# URL of open flow controller service.
+ofc_service_url=http://<ofc-host>:<ofc-port>/cluster/v1.0/
+
+# The name list of the networks that have no need to send requests to OFC.
+ofc_uncontrolled_network_names=resource pool
+
+
+[KEYSTONE]
+# Keystone user
+auth_url=http://<keystone-host>:<keystone-port>/v2.0
+
+# Keystone password
+tenant_name=<keystone-admin-tenant-name>
+
+# Admin tenant name
+username=<keystone-admin-username>
+
+# Authentication URL
+password=<keystone-admin-password>
+========================================

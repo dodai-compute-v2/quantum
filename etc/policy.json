@@ -30,8 +30,10 @@
 
     "create_network": "",
     "get_network": "rule:admin_or_owner or rule:shared or rule:external",
+    "get_networks:vlan_id": "",
     "create_network:shared": "rule:admin_only",
     "create_network:router:external": "rule:admin_only",
+    "create_network:vlan_id": "",
     "update_network": "rule:admin_or_owner",
     "delete_network": "rule:admin_or_owner",
 
