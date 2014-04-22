@@ -74,7 +74,7 @@ class DodaiL2EVNCV2Driver(ofc_driver_base.OFCDriverBase):
     def show_switch_datapath_id(self):
         LOG.debug("#DodaiL2EVNCV2Driver.show_switch_datapath_id() called.")
         client = get_client()
-        return client.service.showSwitchDatapathId()
+        return client.service.showDatapathId()
 
     def show_ports(self, dpid):
         LOG.debug("#DodaiL2EVNCV2Driver.show_ports() called.")

@@ -36,6 +36,12 @@ Here is a sample of dodai.ini.
 ========================================
 [DATABASE]
 sql_connection=mysql://<database-user>:<database-pass>@<database-host>/<database-name>?charset=utf8
+# Maximum number of SQL connections to keep open in a QueuePool in SQLAlchemy
+# Example sqlalchemy_pool_size = 5
+# Maximum number of overflow connections in a QueuePool in SQLAlchemy
+# Example sqlalchemy_max_overflow = 10
+# Timeout of the open connections QueuePool in SQLAlchemy
+# Example sqlalchemy_pool_timeout = 30
 
 
 [OFC]
@@ -50,16 +56,16 @@ ofc_service_url=http://<ofc-host>:<ofc-port>/cluster/v1.0/
 ofc_uncontrolled_network_names=resource pool
 
 
-[KEYSTONE]
-# Keystone user
-auth_url=http://<keystone-host>:<keystone-port>/v2.0
+[NOVA]
+# Nova admin user
+username=<nova-admin-username>
 
-# Keystone password
-tenant_name=<keystone-admin-tenant-name>
+# Nova admin password
+password=<nova-admin-password>
 
-# Admin tenant name
-username=<keystone-admin-username>
+# Nova admin tenant name
+tenant_name=<nova-admin-tenant-name>
 
 # Authentication URL
-password=<keystone-admin-password>
+auth_url=http://<keystone-host>:<keystone-port>/v2.0
 ========================================

@@ -53,8 +53,6 @@ class OFCManager():
                 if port.regionName == region_name:
                     return
 
-        self.remove_region(region_name, vlan_id)
-
     def create_region(self, region_name, vlan_id):
         try:
             self.ofc_driver.create_region(region_name)
@@ -62,6 +60,9 @@ class OFCManager():
         except:
             raise exceptions.OFCRegionCreationFailed(region_name=region_name)
 
+        # NOTE(yokose): If vlan is not specified,
+        #               set_outer_port_association_setting is skipped
+        if vlan_id:
         try:
             dodai_outer_ports = dodai_db.get_all_dodai_outer_ports(None)
             for dodai_outer_port in dodai_outer_ports:
@@ -78,6 +79,9 @@ class OFCManager():
                             region_name=region_name, vlan_id=vlan_id)
 
     def remove_region(self, region_name, vlan_id):
+        # NOTE(yokose): If vlan is not specified,
+        #               clear_outer_port_association_setting is skipped
+        if vlan_id:
         try:
             dodai_outer_ports = dodai_db.get_all_dodai_outer_ports(None)
             for dodai_outer_port in dodai_outer_ports:

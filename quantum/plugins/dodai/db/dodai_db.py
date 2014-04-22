@@ -103,6 +103,16 @@ def get_ipallocation_by_floatingip(session, port_id, ip_address, network_id):
     return ipallocation
 
 
+def get_ipallocation_by_port(session, port_id, network_id):
+    if not session:
+        session = db.get_session()
+    ipallocation = (session.query(models_v2.IPAllocation).
+                    filter_by(port_id=port_id).
+                    filter_by(network_id=network_id).
+                    first())
+    return ipallocation
+
+
 def create_dodai_outer_port(session, dpid, outer_port):
     """
     Creates dodai_outer_port record.

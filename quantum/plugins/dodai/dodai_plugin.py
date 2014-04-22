@@ -14,16 +14,17 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-import webob.exc
 import netaddr
+import os
 import re
+import webob.exc
 
-from keystoneclient.v2_0 import client as keystone_client
 from novaclient import extension as nc_ext
 from novaclient.v1_1 import client as nova_client
 from novaclient.v1_1.contrib import baremetal
 from oslo.config import cfg
 
+import quantum
 from quantum.api.v2 import attributes as attr
 from quantum.db import api as db
 from quantum.db import db_base_plugin_v2
@@ -45,6 +46,7 @@ CONF = cfg.CONF
 NOVACLIENT_EXTENSIONS = [
     nc_ext.Extension(baremetal.__name__.split('.')[-1], baremetal),
     ]
+ACTIVE_STATES = ("ACTIVE",)
 DEVICE_OWNER_COMPUTE_PREFIX = 'compute:'
 METAKEY_FLOATING_IP_PREFIX = 'floating_ip_'
 
@@ -60,14 +62,14 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         attr.RESOURCE_ATTRIBUTE_MAP['networks'].update({
                 'vlan_id': {'allow_post': True,
                             'allow_put': True,
-                            'validate': {'type:non_negative': None},
-                            'required': True,
+                            'default': None,
                             'is_visible': True}})
         # NOTE(yokose): Set the plugin default extension path
         #               if no api_extensions_path is specified.
         if not CONF.api_extensions_path:
             CONF.set_override('api_extensions_path',
-                              'quantum/plugins/dodai/extensions')
+                              os.path.join(quantum.__path__[0],
+                                           'plugins/dodai/extensions'))
         db.configure_db()
         self.ofc = ofc_manager.OFCManager()
 
@@ -75,19 +77,36 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug("#DodaiPlugin.create_network() called.")
         LOG.debug("#network=%s" % network)
         session = context.session
-        # check vlan id
         vlan_id = network['network']['vlan_id']
-        if dodai_db.get_dodai_network_by_vlan_id(session, vlan_id):
+        # check vlan id
+        res = _validate_non_negative_or_none(vlan_id)
+        if res:
+            msg = _("Invalid input for %(attr)s. Reason: %(reason)s.")\
+                  % dict(attr='vlan_id', reason=res)
+            raise webob.exc.HTTPBadRequest(msg)
+        if vlan_id and dodai_db.get_dodai_network_by_vlan_id(session, vlan_id):
             raise exceptions.InvalidVlanId(vlan_id=vlan_id)
+        # NOTE(yokose): router:external is always true
+        network['network'][l3.EXTERNAL] = True
 
         with session.begin(subtransactions=True):
             # create networks
             net = super(DodaiL2EPlugin, self).create_network(context, network)
             # create dodai_networks
+            if vlan_id:
             dodai_db.create_dodai_network(session, net['id'], vlan_id)
             # create externalnetworks
             self._process_l3_create(context, network['network'], net['id'])
             self._extend_network_dict_l3(context, net)
+            # create region
+            if self._is_ofc_controlled_network(context, net['id']):
+                region_name = _uuid_to_region_name(net['id'])
+                try:
+                    if not self.ofc.has_region(region_name):
+                        self.ofc.create_region(region_name, vlan_id)
+                except Exception as e:
+                    LOG.error(_("Error occurred in ofc.create_region: %s") % e)
+                    raise e
 
         # format response
         net = self._make_dodai_network_dict(net, None, vlan_id)
@@ -113,7 +132,7 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
 
     def get_network(self, context, id, fields=None):
         query = self._model_query(context, models_v2.Network)
-        query = query.join(dodai_models.DodaiNetwork,
+        query = query.outerjoin(dodai_models.DodaiNetwork,
                            models_v2.Network.id ==\
                                dodai_models.DodaiNetwork.network_id)
         query = query.add_columns(dodai_models.DodaiNetwork.vlan_id)
@@ -127,7 +146,7 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
     def get_networks(self, context, filters=None, fields=None,
                      sorts=None, limit=None, marker=None, page_reverse=False):
         query = self._model_query(context, models_v2.Network)
-        query = query.join(dodai_models.DodaiNetwork,
+        query = query.outerjoin(dodai_models.DodaiNetwork,
                            models_v2.Network.id ==\
                                dodai_models.DodaiNetwork.network_id)
         query = query.add_columns(dodai_models.DodaiNetwork.vlan_id)
@@ -155,6 +174,16 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug("#id=%s" % id)
         session = context.session
         with session.begin(subtransactions=True):
+            # destroy region
+            if self._is_ofc_controlled_network(context, id):
+                region_name = _uuid_to_region_name(id)
+                dodai_net = dodai_db.get_dodai_network(session, id)
+                vlan_id = dodai_net['vlan_id'] if dodai_net else None
+                try:
+                    self.ofc.remove_region(region_name, vlan_id)
+                except Exception as e:
+                    LOG.error(_("Error occurred in ofc.remove_region: %s") % e)
+                    raise e
             # delete dodai_networks
             dodai_db.delete_dodai_network(session, id)
             # delete networks
@@ -180,22 +209,15 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug("#DodaiPlugin.create_port() called.")
         LOG.debug("#port=%s" % port)
         device_owner = port['port']['device_owner']
+        # create ports
+        db_port = super(DodaiL2EPlugin, self).create_port(context, port)
+
         # NOTE(yokose): If this method is called from run_instance,
         #               device_owner is set as 'compute:None'.
         if device_owner.startswith(DEVICE_OWNER_COMPUTE_PREFIX):
             net_id = port['port']['network_id']
             if self._is_ofc_controlled_network(context, net_id):
                 region_name = _uuid_to_region_name(net_id)
-                dodai_net = dodai_db.get_dodai_network(context.session, net_id)
-                vlan_id = dodai_net['vlan_id']
-                try:
-                    # create region
-                    if not self.ofc.has_region(region_name):
-                        self.ofc.create_region(region_name, vlan_id)
-                except Exception as e:
-                    LOG.error(_("Error occurred in ofc.create_region: %s") % e)
-                    raise e
-
                 tenant_id = port['port']['tenant_id']
                 device_id = port['port']['device_id']
                 mac_address = port['port']['mac_address']
@@ -203,17 +225,18 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                                             tenant_id, device_id, mac_address)
                 port_no = bm_interface['port_no']
                 dpid = bm_interface['datapath_id']
-                try:
                     # set server port
+                try:
                     self.ofc.update_for_run_instance(region_name,
                                                      port_no, dpid)
                 except Exception as e:
                     LOG.error(_("Error occurred in "
                                 "ofc.update_for_run_instance: %s") % e)
+                    super(DodaiL2EPlugin,
+                          self).delete_port(context, db_port['id'])
                     raise e
 
-        # create ports
-        db_port = super(DodaiL2EPlugin, self).create_port(context, port)
+        LOG.info(_("Port created successfully."))
         return db_port
 
     def delete_port(self, context, id):
@@ -221,14 +244,15 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug("#id=%s" % id)
         db_port = self._get_port(context, id)
         device_owner = db_port['device_owner']
+        session = context.session
         # NOTE(yokose): If this method is called from run_instance,
         #               device_owner is set as 'compute:None'.
         if device_owner.startswith(DEVICE_OWNER_COMPUTE_PREFIX):
             net_id = db_port['network_id']
             if self._is_ofc_controlled_network(context, net_id):
                 region_name = _uuid_to_region_name(net_id)
-                dodai_net = dodai_db.get_dodai_network(context.session, net_id)
-                vlan_id = dodai_net['vlan_id']
+                dodai_net = dodai_db.get_dodai_network(session, net_id)
+                vlan_id = dodai_net['vlan_id'] if dodai_net else None
                 tenant_id = db_port['tenant_id']
                 device_id = db_port['device_id']
                 mac_address = db_port['mac_address']
@@ -236,8 +260,8 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                                         tenant_id, device_id, mac_address)
                 port_no = bm_interface['port_no']
                 dpid = bm_interface['datapath_id']
-                try:
                     # clear server port, remove region
+                try:
                     self.ofc.update_for_terminate_instance(
                                  region_name, port_no, dpid, vlan_id)
                 except Exception as e:
@@ -245,10 +269,17 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                                 "ofc.update_for_terminate_instance: %s") % e)
                     raise e
 
+        with session.begin(subtransactions=True):
         # set null to floatingips.fixed_port_id, fixed_ip_address
-        self.disassociate_floatingips(context, id)
+            # NOTE(yokose): If you call self.disassociate_floatingips()
+            #               instead of below, exception occurs when multiple
+            #               floatingips are associated with the same NIC.
+            session.query(l3_db.FloatingIP).filter_by(
+                    fixed_port_id=id).update({'fixed_port_id': None,
+                                              'fixed_ip_address': None})
         # delete ports
         super(DodaiL2EPlugin, self).delete_port(context, id)
+
         LOG.info(_("Port deleted successfully."))
 
     def update_floatingip(self, context, id, floatingip):
@@ -274,6 +305,13 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                              tenant_id, device_id, meta_obj)
             # update floatingips
             fixed_ip_address = floatingip['floatingip'].get('fixed_ip_address')
+            if not fixed_ip_address:
+                # NOTE(yokose): handle the case where this is called by CLI
+                #               (quantum floatingip-associate)
+                ipallocation = dodai_db.get_ipallocation_by_port(session,
+                                           fixed_port_id,
+                                           fixed_port['network_id'])
+                fixed_ip_address = ipallocation['ip_address']
             db_fip = dodai_db.update_floatingip(session, id,
                                                 fixed_ip_address,
                                                 fixed_port_id)
@@ -316,17 +354,10 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.info(_("Floating IP deleted successfully."))
 
     def _get_nova_client(self, tenant_id):
-        kc = keystone_client.Client(username=CONF.KEYSTONE.username,
-                                    password=CONF.KEYSTONE.password,
-                                    tenant_id=tenant_id,
-                                    auth_url=CONF.KEYSTONE.auth_url)
-        tenant = kc.tenants.get(tenant_id)
-        tenant_name = tenant.name
-
-        nc = nova_client.Client(CONF.KEYSTONE.username,
-                                CONF.KEYSTONE.password,
-                                tenant_name,
-                                CONF.KEYSTONE.auth_url,
+        nc = nova_client.Client(CONF.NOVA.username,
+                                CONF.NOVA.password,
+                                CONF.NOVA.tenant_name,
+                                CONF.NOVA.auth_url,
                                 extensions=NOVACLIENT_EXTENSIONS,
                                 no_cache=True)
         return nc
@@ -362,7 +393,7 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
             raise Exception("plugin raised exception, check logs")
 
     def _get_subnet_from_floating_ip(self, context, fip):
-        # NOTE(yokose): identify subnet by floatingip-ipallocation relationship
+        # NOTE(yokose): identify subnet by ipallocations
         session = context.session
         ipallocation = dodai_db.get_ipallocation_by_floatingip(session,
                                    fip['floating_port_id'],
@@ -428,12 +459,11 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug("#device_id=%s" % device_id)
         fip = self._get_floatingip(context, floatingip_id)
         floating_ip_address = fip['floating_ip_address']
-        floating_port = self._get_port(context, fip['floating_port_id'])
         subnet = self._get_subnet_from_floating_ip(context, fip)
         dnss = [{'address': dnsnameserver['address']} for dnsnameserver
                      in self._get_dns_by_subnet(context, subnet['id'])]
         meta_obj = {'ip_address': floating_ip_address,
-                    'mac_address': floating_port['mac_address'],
+                    'mac_address': fixed_port['mac_address'],
                     'netmask': _cidr_to_netmask(subnet['cidr']),
                     'gateway_ip': subnet['gateway_ip'],
                     'dnsnameservers': dnss}
@@ -455,12 +485,25 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
 
     def _set_instance_metadata(self, tenant_id, instance_uuid, key, value):
         nc = self._get_nova_client(tenant_id)
+        # NOTE(yokose): check if instance is in-service to set_meta
+        self._health_check_instance(tenant_id, instance_uuid)
         result = nc.servers.set_meta(instance_uuid, {key: value})
         return result
 
     def _delete_instance_metadata(self, tenant_id, instance_uuid, key):
         nc = self._get_nova_client(tenant_id)
+        # NOTE(yokose): check if instance is in-service to delete_meta
+        self._health_check_instance(tenant_id, instance_uuid)
         nc.servers.delete_meta(instance_uuid, [key])
+
+    def _health_check_instance(self, tenant_id, instance_uuid):
+        nc = self._get_nova_client(tenant_id)
+        instance = nc.servers.get(instance_uuid)
+        task_state = getattr(instance, "OS-EXT-STS:task_state", None)
+        if instance.status not in ACTIVE_STATES or task_state is not None:
+            msg = _("Instance is not in-service. status: %s, task_state: %s")\
+                  % (instance.status, task_state)
+            raise webob.exc.HTTPBadRequest(msg)
 
     def _is_ofc_controlled_network(self, context, network_id):
         # NOTE(yokose): Whether send request to OFC or not depends on
@@ -508,3 +551,18 @@ def _cidr_to_netmask(cidr):
     if cidr is None:
         return None
     return str(netaddr.IPNetwork(cidr).netmask)
+
+
+def _validate_non_negative_or_none(data, valid_values=None):
+    if data is not None:
+        try:
+            data = int(data)
+        except (ValueError, TypeError):
+            msg = _("'%s' is not an integer") % data
+            LOG.debug(msg)
+            return msg
+
+        if data < 0:
+            msg = _("'%s' should be non-negative") % data
+            LOG.debug(msg)
+            return msg

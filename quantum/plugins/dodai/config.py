@@ -19,7 +19,8 @@ from oslo.config import cfg
 
 ofc_opts = [
     cfg.StrOpt('ofc_driver',
-               default='quantum.plugins.dodai.drivers.l2e_vnc.L2EVNCV2Driver',
+               default='quantum.plugins.dodai.drivers.l2e_vnc.'
+                       'DodaiL2EVNCV2Driver',
                help='The driver used to manage the OpenFlow Controller.'),
     cfg.StrOpt('ofc_service_url',
                default=None,
@@ -30,14 +31,14 @@ ofc_opts = [
                      "requests to OFC."),
 ]
 
-keystone_opts = [
-    cfg.StrOpt('username', help=_("Keystone user")),
-    cfg.StrOpt('password', help=_("Keystone password"),
+nova_opts = [
+    cfg.StrOpt('username', help=_("Nova admin user")),
+    cfg.StrOpt('password', help=_("Nova admin password"),
                secret=True),
-    cfg.StrOpt('tenant_name', help=_("Admin tenant name")),
+    cfg.StrOpt('tenant_name', help=_("Nova admin tenant name")),
     cfg.StrOpt('auth_url', help=_("Authentication URL")),
 ]
 
 CONF = cfg.CONF
 CONF.register_opts(ofc_opts, 'OFC')
-CONF.register_opts(keystone_opts, 'KEYSTONE')
+CONF.register_opts(nova_opts, 'NOVA')
