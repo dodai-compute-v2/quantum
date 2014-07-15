@@ -94,7 +94,7 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
             net = super(DodaiL2EPlugin, self).create_network(context, network)
             # create dodai_networks
             if vlan_id:
-            dodai_db.create_dodai_network(session, net['id'], vlan_id)
+                dodai_db.create_dodai_network(session, net['id'], vlan_id)
             # create externalnetworks
             self._process_l3_create(context, network['network'], net['id'])
             self._extend_network_dict_l3(context, net)
@@ -133,8 +133,8 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
     def get_network(self, context, id, fields=None):
         query = self._model_query(context, models_v2.Network)
         query = query.outerjoin(dodai_models.DodaiNetwork,
-                           models_v2.Network.id ==\
-                               dodai_models.DodaiNetwork.network_id)
+                                models_v2.Network.id ==\
+                                    dodai_models.DodaiNetwork.network_id)
         query = query.add_columns(dodai_models.DodaiNetwork.vlan_id)
         net, vlan_id = query.filter(models_v2.Network.id == id).first()
 
@@ -147,8 +147,8 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                      sorts=None, limit=None, marker=None, page_reverse=False):
         query = self._model_query(context, models_v2.Network)
         query = query.outerjoin(dodai_models.DodaiNetwork,
-                           models_v2.Network.id ==\
-                               dodai_models.DodaiNetwork.network_id)
+                                models_v2.Network.id ==\
+                                    dodai_models.DodaiNetwork.network_id)
         query = query.add_columns(dodai_models.DodaiNetwork.vlan_id)
         if filters:
             query = self._apply_filters_to_query(query, models_v2.Network,
@@ -225,7 +225,7 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                                             tenant_id, device_id, mac_address)
                 port_no = bm_interface['port_no']
                 dpid = bm_interface['datapath_id']
-                    # set server port
+                # set server port
                 try:
                     self.ofc.update_for_run_instance(region_name,
                                                      port_no, dpid)
@@ -260,7 +260,7 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                                         tenant_id, device_id, mac_address)
                 port_no = bm_interface['port_no']
                 dpid = bm_interface['datapath_id']
-                    # clear server port, remove region
+                # clear server port, remove region
                 try:
                     self.ofc.update_for_terminate_instance(
                                  region_name, port_no, dpid, vlan_id)
