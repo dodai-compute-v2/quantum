@@ -244,14 +244,13 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug("#id=%s" % id)
         db_port = self._get_port(context, id)
         device_owner = db_port['device_owner']
-        session = context.session
         # NOTE(yokose): If this method is called from run_instance,
         #               device_owner is set as 'compute:None'.
         if device_owner.startswith(DEVICE_OWNER_COMPUTE_PREFIX):
             net_id = db_port['network_id']
             if self._is_ofc_controlled_network(context, net_id):
                 region_name = _uuid_to_region_name(net_id)
-                dodai_net = dodai_db.get_dodai_network(session, net_id)
+                dodai_net = dodai_db.get_dodai_network(context.session, net_id)
                 vlan_id = dodai_net['vlan_id'] if dodai_net else None
                 tenant_id = db_port['tenant_id']
                 device_id = db_port['device_id']
@@ -269,17 +268,10 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                                 "ofc.update_for_terminate_instance: %s") % e)
                     raise e
 
-        with session.begin(subtransactions=True):
         # set null to floatingips.fixed_port_id, fixed_ip_address
-            # NOTE(yokose): If you call self.disassociate_floatingips()
-            #               instead of below, exception occurs when multiple
-            #               floatingips are associated with the same NIC.
-            session.query(l3_db.FloatingIP).filter_by(
-                    fixed_port_id=id).update({'fixed_port_id': None,
-                                              'fixed_ip_address': None})
+        self.disassociate_floatingips(context, id)
         # delete ports
         super(DodaiL2EPlugin, self).delete_port(context, id)
-
         LOG.info(_("Port deleted successfully."))
 
     def update_floatingip(self, context, id, floatingip):
