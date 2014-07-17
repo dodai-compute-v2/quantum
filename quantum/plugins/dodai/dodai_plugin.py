@@ -94,7 +94,7 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
             net = super(DodaiL2EPlugin, self).create_network(context, network)
             # create dodai_networks
             if vlan_id:
-            dodai_db.create_dodai_network(session, net['id'], vlan_id)
+                dodai_db.create_dodai_network(session, net['id'], vlan_id)
             # create externalnetworks
             self._process_l3_create(context, network['network'], net['id'])
             self._extend_network_dict_l3(context, net)
@@ -133,8 +133,8 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
     def get_network(self, context, id, fields=None):
         query = self._model_query(context, models_v2.Network)
         query = query.outerjoin(dodai_models.DodaiNetwork,
-                           models_v2.Network.id ==\
-                               dodai_models.DodaiNetwork.network_id)
+                                models_v2.Network.id ==\
+                                    dodai_models.DodaiNetwork.network_id)
         query = query.add_columns(dodai_models.DodaiNetwork.vlan_id)
         net, vlan_id = query.filter(models_v2.Network.id == id).first()
 
@@ -147,8 +147,8 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                      sorts=None, limit=None, marker=None, page_reverse=False):
         query = self._model_query(context, models_v2.Network)
         query = query.outerjoin(dodai_models.DodaiNetwork,
-                           models_v2.Network.id ==\
-                               dodai_models.DodaiNetwork.network_id)
+                                models_v2.Network.id ==\
+                                    dodai_models.DodaiNetwork.network_id)
         query = query.add_columns(dodai_models.DodaiNetwork.vlan_id)
         if filters:
             query = self._apply_filters_to_query(query, models_v2.Network,
@@ -225,7 +225,7 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                                             tenant_id, device_id, mac_address)
                 port_no = bm_interface['port_no']
                 dpid = bm_interface['datapath_id']
-                    # set server port
+                # set server port
                 try:
                     self.ofc.update_for_run_instance(region_name,
                                                      port_no, dpid)
@@ -244,14 +244,13 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
         LOG.debug("#id=%s" % id)
         db_port = self._get_port(context, id)
         device_owner = db_port['device_owner']
-        session = context.session
         # NOTE(yokose): If this method is called from run_instance,
         #               device_owner is set as 'compute:None'.
         if device_owner.startswith(DEVICE_OWNER_COMPUTE_PREFIX):
             net_id = db_port['network_id']
             if self._is_ofc_controlled_network(context, net_id):
                 region_name = _uuid_to_region_name(net_id)
-                dodai_net = dodai_db.get_dodai_network(session, net_id)
+                dodai_net = dodai_db.get_dodai_network(context.session, net_id)
                 vlan_id = dodai_net['vlan_id'] if dodai_net else None
                 tenant_id = db_port['tenant_id']
                 device_id = db_port['device_id']
@@ -260,7 +259,7 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                                         tenant_id, device_id, mac_address)
                 port_no = bm_interface['port_no']
                 dpid = bm_interface['datapath_id']
-                    # clear server port, remove region
+                # clear server port, remove region
                 try:
                     self.ofc.update_for_terminate_instance(
                                  region_name, port_no, dpid, vlan_id)
@@ -269,17 +268,10 @@ class DodaiL2EPlugin(db_base_plugin_v2.QuantumDbPluginV2,
                                 "ofc.update_for_terminate_instance: %s") % e)
                     raise e
 
-        with session.begin(subtransactions=True):
         # set null to floatingips.fixed_port_id, fixed_ip_address
-            # NOTE(yokose): If you call self.disassociate_floatingips()
-            #               instead of below, exception occurs when multiple
-            #               floatingips are associated with the same NIC.
-            session.query(l3_db.FloatingIP).filter_by(
-                    fixed_port_id=id).update({'fixed_port_id': None,
-                                              'fixed_ip_address': None})
+        self.disassociate_floatingips(context, id)
         # delete ports
         super(DodaiL2EPlugin, self).delete_port(context, id)
-
         LOG.info(_("Port deleted successfully."))
 
     def update_floatingip(self, context, id, floatingip):

@@ -63,36 +63,36 @@ class OFCManager():
         # NOTE(yokose): If vlan is not specified,
         #               set_outer_port_association_setting is skipped
         if vlan_id:
-        try:
-            dodai_outer_ports = dodai_db.get_all_dodai_outer_ports(None)
-            for dodai_outer_port in dodai_outer_ports:
-                self.ofc_driver.set_outer_port_association_setting(
-                        dodai_outer_port['dpid'],
-                        dodai_outer_port['outer_port'],
-                        vlan_id, 65535, region_name)
+            try:
+                dodai_outer_ports = dodai_db.get_all_dodai_outer_ports(None)
+                for dodai_outer_port in dodai_outer_ports:
+                    self.ofc_driver.set_outer_port_association_setting(
+                            dodai_outer_port['dpid'],
+                            dodai_outer_port['outer_port'],
+                            vlan_id, 65535, region_name)
 
-            self.ofc_driver.save()
-        except:
-            self.ofc_driver.destroy_region(region_name)
-            self.ofc_driver.save()
-            raise exceptions.OFCRegionSettingOuterPortAssocFailed(
-                            region_name=region_name, vlan_id=vlan_id)
+                self.ofc_driver.save()
+            except:
+                self.ofc_driver.destroy_region(region_name)
+                self.ofc_driver.save()
+                raise exceptions.OFCRegionSettingOuterPortAssocFailed(
+                                region_name=region_name, vlan_id=vlan_id)
 
     def remove_region(self, region_name, vlan_id):
         # NOTE(yokose): If vlan is not specified,
         #               clear_outer_port_association_setting is skipped
         if vlan_id:
-        try:
-            dodai_outer_ports = dodai_db.get_all_dodai_outer_ports(None)
-            for dodai_outer_port in dodai_outer_ports:
-                self.ofc_driver.clear_outer_port_association_setting(
-                        dodai_outer_port['dpid'],
-                        dodai_outer_port['outer_port'],
-                        vlan_id)
+            try:
+                dodai_outer_ports = dodai_db.get_all_dodai_outer_ports(None)
+                for dodai_outer_port in dodai_outer_ports:
+                    self.ofc_driver.clear_outer_port_association_setting(
+                            dodai_outer_port['dpid'],
+                            dodai_outer_port['outer_port'],
+                            vlan_id)
 
-            self.ofc_driver.save()
-        except:
-            pass
+                self.ofc_driver.save()
+            except:
+                pass
 
         self.ofc_driver.destroy_region(region_name)
         self.ofc_driver.save()
