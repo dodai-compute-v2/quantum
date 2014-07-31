@@ -27,6 +27,7 @@ from quantum.common import exceptions as q_exc
 from quantum.plugins.dodai import exceptions as d_exc
 from quantum.plugins.dodai.db import dodai_db
 from quantum import manager
+from quantum import policy
 from quantum import wsgi
 
 
@@ -102,6 +103,7 @@ class DodaiOuterPortController(common.QuantumController, wsgi.Controller):
 
     def index(self, request):
         """ Returns a list of Dodai OuterPorts """
+        policy.enforce(request.context, "outer-port-list", {})
         dops = dodai_db.get_all_dodai_outer_ports(None)
         result = [self._make_dodai_outer_port_dict(dop)[self._resource_name]
                       for dop in dops]
@@ -109,6 +111,7 @@ class DodaiOuterPortController(common.QuantumController, wsgi.Controller):
 
     def show(self, request, id):
         """ Returns Dodai OuterPort details for the given id """
+        policy.enforce(request.context, "outer-port-show", {})
         dop = dodai_db.get_dodai_outer_port(None, id)
         if dop is None:
             msg = (_("Unable to find %s with the specified identifier.") %
@@ -119,6 +122,7 @@ class DodaiOuterPortController(common.QuantumController, wsgi.Controller):
 
     def create(self, request):
         """ Creates a new Dodai OuterPort """
+        policy.enforce(request.context, "outer-port-create", {})
         try:
             body = self._deserialize(request.body, request.get_content_type())
             req_body = self._prepare_request_body(body,
@@ -133,6 +137,7 @@ class DodaiOuterPortController(common.QuantumController, wsgi.Controller):
 
     def delete(self, request, id):
         """ Destroys the Dodai OuterPort with the given id """
+        policy.enforce(request.context, "outer-port-delete", {})
         dop = dodai_db.get_dodai_outer_port(None, id)
         if dop is None:
             msg = (_("Unable to find %s with the specified identifier.") %
