@@ -43,13 +43,17 @@ class DodaiL2EVNCV2Driver(ofc_driver_base.OFCDriverBase):
         LOG.debug("#DodaiL2EVNCV2Driver.create_region() called.")
         LOG.debug("#region_name=%s" % region_name)
         client = get_client()
-        client.service.createRegion(region_name)
+        response = client.service.createRegion(region_name)
+        LOG.debug("#DodaiL2EVNCV2Driver.create_region() response is (%s)" %
+                  response)
 
     def destroy_region(self, region_name):
         LOG.debug("#DodaiL2EVNCV2Driver.destroy_region() called.")
         LOG.debug("#region_name=%s" % region_name)
         client = get_client()
-        client.service.destroyRegion(region_name)
+        response = client.service.destroyRegion(region_name)
+        LOG.debug("#DodaiL2EVNCV2Driver.destroy_region() response is (%s)" %
+                  response)
 
     def show_region(self):
         LOG.debug("#DodaiL2EVNCV2Driver.show_region() called.")
@@ -62,14 +66,18 @@ class DodaiL2EVNCV2Driver(ofc_driver_base.OFCDriverBase):
         LOG.debug("#server_port=%s" % server_port)
         LOG.debug("#region_name=%s" % region_name)
         client = get_client()
-        client.service.setServerPort(dpid, server_port, region_name)
+        response = client.service.setServerPort(dpid, server_port, region_name)
+        LOG.debug("#DodaiL2EVNCV2Driver.set_server_port() response is (%s)" %
+                  response)
 
     def clear_server_port(self, dpid, server_port):
         LOG.debug("#DodaiL2EVNCV2Driver.clear_server_port() called.")
         LOG.debug("#dpid=%s" % dpid)
         LOG.debug("#server_port=%s" % server_port)
         client = get_client()
-        client.service.clearServerPort(dpid, server_port)
+        response = client.service.clearServerPort(dpid, server_port)
+        LOG.debug("#DodaiL2EVNCV2Driver.clear_server_port() response is (%s)"
+                  % response)
 
     def show_switch_datapath_id(self):
         LOG.debug("#DodaiL2EVNCV2Driver.show_switch_datapath_id() called.")
@@ -93,9 +101,11 @@ class DodaiL2EVNCV2Driver(ofc_driver_base.OFCDriverBase):
         LOG.debug("#inner_vlan_id=%s" % inner_vlan_id)
         LOG.debug("#region_name=%s" % region_name)
         client = get_client()
-        client.service.setOuterPortAssociationSetting(
-                dpid, outer_port, outer_vlan_id,
-                inner_vlan_id, region_name)
+        response = client.service.setOuterPortAssociationSetting(
+            dpid, outer_port, outer_vlan_id,
+            inner_vlan_id, region_name)
+        LOG.debug("#DodaiL2EVNCV2Driver.set_outer_port_association_setting() "
+                  "response is (%s)" % response)
 
     def clear_outer_port_association_setting(self,
                 dpid, outer_port, outer_vlan_id):
@@ -105,13 +115,17 @@ class DodaiL2EVNCV2Driver(ofc_driver_base.OFCDriverBase):
         LOG.debug("#outer_port=%s" % outer_port)
         LOG.debug("#outer_vlan_id=%s" % outer_vlan_id)
         client = get_client()
-        client.service.clearOuterPortAssociationSetting(
-                dpid, outer_port, outer_vlan_id)
+        response = client.service.clearOuterPortAssociationSetting(
+            dpid, outer_port, outer_vlan_id)
+        LOG.debug("#DodaiL2EVNCV2Driver."
+                  "clear_outer_port_association_setting() response is (%s)" %
+                  response)
 
     def save(self):
         LOG.debug("#DodaiL2EVNCV2Driver.save() called.")
         client = get_client()
-        client.service.save()
+        response = client.service.save()
+        LOG.debug("#DodaiL2EVNCV2Driver.save() reponse is (%s)" % response)
 
 
 class VNCDummyDriver(ofc_driver_base.OFCDriverBase):
