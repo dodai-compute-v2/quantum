@@ -23,7 +23,7 @@ class InvalidVlanId(q_exc.Conflict):
 
 
 class DodaiPluginException(q_exc.QuantumException):
-    pass
+    message = _("Error occurred in %s")
 
 
 class DodaiOuterPortNotFound(q_exc.QuantumException):
